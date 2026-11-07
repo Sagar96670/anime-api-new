@@ -30,14 +30,46 @@ async function resolveEpisode(tmdbId, episodeId, requestedQuality) {
     throw new Error("Blakite video data unavailable");
   }
 
-  const quality = qualityCodes[requestedQuality]
+  const ranges = {};
+  (data.ranges || "").split("\n").forEach(line => {
+    const match = line.trim().match(/^(\d+-\d+)\s*\(([^)]+)\)/);
+    if (match) ranges[match[2].trim()] = match[1];
+  });
+
+  const availableQualities = data.format === "M3U8"
+    ? Object.keys(qualityCodes).filter(q => ranges[q])
+    : Object.keys(qualityCodes).slice(0, Math.min(data.qid || 5, 5));
+
+  const quality = availableQualities.includes(requestedQuality)
     ? requestedQuality
-    : data.quality || "480p";
+    : availableQualities.includes(data.quality)
+      ? data.quality
+      : availableQualities[availableQualities.length - 1];
 
   const code = qualityCodes[quality];
 
   if (!code) {
     throw new Error("Unsupported video quality");
+  }
+
+  let videoUrl;
+
+  if (data.format === "MP4") {
+    videoUrl = `${CDN}${data.dataId}.${code}.mp4`;
+  } else if (data.format === "M3U8") {
+    const range = ranges[quality];
+
+    if (!range) {
+      throw new Error(`Quality range unavailable: ${quality}`);
+    }
+
+    videoUrl =
+      `${CDN}${data.dataId}.${code}.tar` +
+      `?r_file=chunklist.m3u8` +
+      `&r_type=application%2Fvnd.apple.mpegurl` +
+      `&r_range=${range}`;
+  } else {
+    throw new Error(`Unsupported video format: ${data.format}`);
   }
 
   return {
@@ -46,10 +78,9 @@ async function resolveEpisode(tmdbId, episodeId, requestedQuality) {
     season: data.seasonNumber,
     episode: data.episodeNumber,
     quality,
+    available_qualities: availableQualities,
     format: data.format,
-    video_url: data.format === "MP4"
-      ? `${CDN}${data.dataId}.${code}.mp4`
-      : null
+    video_url: videoUrl
   };
 }
 
