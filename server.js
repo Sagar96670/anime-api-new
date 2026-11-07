@@ -34,7 +34,8 @@ app.get("/api/health", (req, res) => {
 
 app.get("/api/cron/sync", async (req, res) => {
   const secret = process.env.CRON_SECRET;
-  if (!secret || req.headers.authorization !== `Bearer ${secret}`) {
+  const antideployCron = req.headers["x-antideploy-cron"] === "1";
+  if (!secret || !antideployCron || req.query.key !== secret) {
     return res.status(401).json({ status: false, message: "Unauthorized" });
   }
   try {
