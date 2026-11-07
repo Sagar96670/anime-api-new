@@ -1,0 +1,100 @@
+require("dotenv").config();
+
+const express = require("express");
+const cors = require("cors");
+const seasonStore = require("./src/storage/season-store");
+
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+app.get("/", (req, res) => {
+  res.json({
+    status: true,
+    message: "Anime API is running",
+    project: "anime-api-new"
+  });
+});
+
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: true,
+    message: "Server is healthy",
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Generic Anime Seasons
+app.get("/api/anime/:animeId/seasons", async (req, res) => {
+  try {
+    const animeId = req.params.animeId;
+    const seasons = [];
+
+    for (let s = 1; s <= 50; s++) {
+      const data = await seasonStore.getSeasonEpisodes(animeId, s);
+
+      if (data) {
+        seasons.push({
+          season: s,
+          episode_count: data.episode_count
+        });
+      }
+    }
+
+    res.json({
+      status: true,
+      anime_id: animeId,
+      total_seasons: seasons.length,
+      seasons
+    });
+  } catch (error) {
+    res.status(500).json({ status: false, message: error.message });
+  }
+});
+
+// Generic Anime Season Episodes
+app.get("/api/anime/:animeId/episodes", async (req, res) => {
+  try {
+    const animeId = req.params.animeId;
+    const season = Number(req.query.season);
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 30));
+
+    if (!Number.isInteger(season) || season < 1) {
+      return res.status(400).json({
+        status: false,
+        message: "Valid season parameter is required"
+      });
+    }
+
+    const data = await seasonStore.getSeasonEpisodes(animeId, season);
+
+    if (!data) {
+      return res.status(404).json({ status: false, message: "Season not found" });
+    }
+
+    const episodes = data.episodes || [];
+    const start = (page - 1) * limit;
+
+    res.json({
+      status: true,
+      anime_id: animeId,
+      season,
+      total_episodes: episodes.length,
+      page,
+      limit,
+      total_pages: Math.ceil(episodes.length / limit),
+      episodes: episodes.slice(start, start + limit)
+    });
+  } catch (error) {
+    res.status(500).json({ status: false, message: error.message });
+  }
+});
+
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => console.log(`Anime API running on port ${PORT}`));
+}
+
+module.exports = app;

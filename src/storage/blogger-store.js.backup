@@ -1,0 +1,96 @@
+require("dotenv").config();
+
+const { google } = require("googleapis");
+
+const auth = new google.auth.OAuth2(
+  process.env.BLOGGER_CLIENT_ID,
+  process.env.BLOGGER_CLIENT_SECRET
+);
+
+auth.setCredentials({
+  refresh_token: process.env.BLOGGER_REFRESH_TOKEN
+});
+
+const blogger = google.blogger({
+  version: "v3",
+  auth
+});
+
+const BLOG_ID = process.env.BLOGGER_BLOG_ID;
+
+function makePostTitle(type, id) {
+  return `[ANIME_API:${type}:${id}]`;
+}
+
+async function findRecord(type, id) {
+  const title = makePostTitle(type, id);
+  let pageToken;
+
+  do {
+    const result = await blogger.posts.list({
+      blogId: BLOG_ID,
+      fetchBodies: true,
+      status: ["LIVE", "DRAFT"],
+      maxResults: 100,
+      pageToken
+    });
+
+    const found = (result.data.items || []).find(post => post.title === title);
+    if (found) return found;
+
+    pageToken = result.data.nextPageToken;
+  } while (pageToken);
+
+  return null;
+}
+
+async function saveRecord(type, id, data) {
+  const title = makePostTitle(type, id);
+
+  const content = JSON.stringify(data);
+
+  const existing = await findRecord(type, id);
+
+  if (existing) {
+    const updated = await blogger.posts.update({
+      blogId: BLOG_ID,
+      postId: existing.id,
+      requestBody: {
+        title,
+        content
+      }
+    });
+
+    return {
+      action: "updated",
+      postId: updated.data.id
+    };
+  }
+
+  const created = await blogger.posts.insert({
+    blogId: BLOG_ID,
+    requestBody: {
+      title,
+      content
+    }
+  });
+
+  return {
+    action: "created",
+    postId: created.data.id
+  };
+}
+
+async function getRecord(type, id) {
+  const post = await findRecord(type, id);
+
+  if (!post) return null;
+
+  return JSON.parse(post.content);
+}
+
+module.exports = {
+  saveRecord,
+  getRecord,
+  findRecord
+};

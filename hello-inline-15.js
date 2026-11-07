@@ -1,0 +1,1 @@
+document.querySelector('.post-body').querySelector('.separator').firstElementChild.remove()
