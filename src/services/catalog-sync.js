@@ -81,7 +81,31 @@ async function syncCatalog() {
         );
 
         if (index >= 0) {
-          target[index] = { ...target[index], ...record };
+          const existing = target[index];
+          const merged = { ...existing, ...record };
+
+          if (existing.seasons && record.seasons) {
+            merged.seasons = { ...record.seasons };
+
+            for (const [seasonKey, oldSeason] of Object.entries(existing.seasons)) {
+              const newSeason = merged.seasons[seasonKey];
+
+              if (newSeason) {
+                merged.seasons[seasonKey] = {
+                  ...oldSeason,
+                  ...newSeason,
+                  totalEpisodes: Math.max(
+                    Number(oldSeason.totalEpisodes) || 0,
+                    Number(newSeason.totalEpisodes) || 0
+                  )
+                };
+              } else {
+                merged.seasons[seasonKey] = oldSeason;
+              }
+            }
+          }
+
+          target[index] = merged;
           updated++;
         } else {
           target.push(record);
