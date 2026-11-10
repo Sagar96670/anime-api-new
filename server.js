@@ -1,6 +1,7 @@
 require("dotenv").config();
 
 const express = require("express");
+const fs = require("fs");
 const { syncCatalog } = require("./src/services/catalog-sync");
 const blakite = require("./src/services/blakite");
 const cors = require("cors");
@@ -22,6 +23,28 @@ app.get("/", (req, res) => {
     message: "Anime API is running",
     project: "anime-api-new"
   });
+});
+
+
+app.get("/api/sync-history", (req, res) => {
+  try {
+    const historyFile = require("path").join(__dirname, "data/sync-history.json");
+    let history = [];
+
+    if (fs.existsSync(historyFile)) {
+      history = JSON.parse(fs.readFileSync(historyFile, "utf8"));
+    }
+
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+
+    res.json({
+      status: true,
+      total: history.length,
+      history: history.slice(0, limit)
+    });
+  } catch (error) {
+    res.status(500).json({ status: false, message: error.message });
+  }
 });
 
 app.get("/api/health", (req, res) => {

@@ -3,7 +3,24 @@ const fs = require("fs");
 const path = require("path");
 
 const DB_FILE = path.join(__dirname, "../../data/anime-db.json");
+const HISTORY_FILE = path.join(__dirname, "../../data/sync-history.json");
 const SOURCE_URL = "https://blakiteapi.xyz/api/getAllAnime.php";
+
+function saveHistory(entry) {
+  let history = [];
+
+  try {
+    history = JSON.parse(fs.readFileSync(HISTORY_FILE, "utf8"));
+    if (!Array.isArray(history)) history = [];
+  } catch {}
+
+  history.unshift(entry);
+  history = history.slice(0, 500);
+
+  const temp = HISTORY_FILE + ".tmp";
+  fs.writeFileSync(temp, JSON.stringify(history, null, 2));
+  fs.renameSync(temp, HISTORY_FILE);
+}
 
 function normalize(item, category) {
   return {
@@ -28,59 +45,91 @@ function normalize(item, category) {
 }
 
 async function syncCatalog() {
-  const response = await axios.get(SOURCE_URL + "?t=" + Date.now(), { timeout: 60000, headers: { "Cache-Control": "no-cache", "Pragma": "no-cache" } });
-  const payload = response.data;
+  try {
+    const response = await axios.get(
+      SOURCE_URL + "?t=" + Date.now(),
+      {
+        timeout: 60000,
+        headers: {
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache"
+        }
+      }
+    );
 
-  if (!payload || payload.success !== true || !payload.data) {
-    throw new Error("Blakite catalog response invalid");
-  }
+    const payload = response.data;
 
-  const db = JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
-  if (!Array.isArray(db.anime)) db.anime = [];
-  if (!Array.isArray(db.movies)) db.movies = [];
-  if (!Array.isArray(db.episodes)) db.episodes = [];
+    if (!payload || payload.success !== true || !payload.data) {
+      throw new Error("Blakite catalog response invalid");
+    }
 
-  let added = 0;
-  let updated = 0;
+    const db = JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
+    if (!Array.isArray(db.anime)) db.anime = [];
+    if (!Array.isArray(db.movies)) db.movies = [];
+    if (!Array.isArray(db.episodes)) db.episodes = [];
 
-  function mergeRecords(target, source, category) {
-    for (const item of Object.values(source || {})) {
-      const record = normalize(item, category);
-      if (!record.id || !record.title) continue;
+    let added = 0;
+    let updated = 0;
 
-      const index = target.findIndex(
-        old => String(old.id) === record.id
-      );
+    function mergeRecords(target, source, category) {
+      for (const item of Object.values(source || {})) {
+        const record = normalize(item, category);
+        if (!record.id || !record.title) continue;
 
-      if (index >= 0) {
-        target[index] = { ...target[index], ...record };
-        updated++;
-      } else {
-        target.push(record);
-        added++;
+        const index = target.findIndex(
+          old => String(old.id) === record.id
+        );
+
+        if (index >= 0) {
+          target[index] = { ...target[index], ...record };
+          updated++;
+        } else {
+          target.push(record);
+          added++;
+        }
       }
     }
+
+    mergeRecords(db.movies, payload.data.movies, "movies");
+    mergeRecords(db.anime, payload.data.series, "series");
+    mergeRecords(db.anime, payload.data.dramas, "dramas");
+
+    db.updated_at = new Date().toISOString();
+
+    const tempFile = DB_FILE + ".tmp";
+    fs.writeFileSync(tempFile, JSON.stringify(db, null, 2));
+    fs.renameSync(tempFile, DB_FILE);
+
+    const result = {
+      success: true,
+      added,
+      updated,
+      movies: db.movies.length,
+      anime: db.anime.length,
+      episodes: db.episodes.length,
+      updated_at: db.updated_at
+    };
+
+    saveHistory({
+      time: result.updated_at,
+      status: "success",
+      ...result
+    });
+
+    return result;
+  } catch (error) {
+    try {
+      saveHistory({
+        time: new Date().toISOString(),
+        status: "failed",
+        error: error.message
+      });
+    } catch (historyError) {
+      console.error("Sync history save failed:", historyError.message);
+    }
+
+    throw error;
   }
-
-  mergeRecords(db.movies, payload.data.movies, "movies");
-  mergeRecords(db.anime, payload.data.series, "series");
-  mergeRecords(db.anime, payload.data.dramas, "dramas");
-
-  db.updated_at = new Date().toISOString();
-
-  const tempFile = DB_FILE + ".tmp";
-  fs.writeFileSync(tempFile, JSON.stringify(db, null, 2));
-  fs.renameSync(tempFile, DB_FILE);
-
-  return {
-    success: true,
-    added,
-    updated,
-    movies: db.movies.length,
-    anime: db.anime.length,
-    episodes: db.episodes.length,
-    updated_at: db.updated_at
-  };
 }
 
 module.exports = { syncCatalog };
