@@ -2039,7 +2039,7 @@ async function setupEpisodeButtons() {
       const data = await response.json();
 
       if (response.ok && data.status && Number.isFinite(Number(data.total_episodes))) {
-        totalEpisodes = Number(data.total_episodes);
+        totalEpisodes = Math.max(totalEpisodes, Number(data.total_episodes));
         console.log('Live API episode count:', totalEpisodes);
       }
     } catch (error) {
