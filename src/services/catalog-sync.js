@@ -28,7 +28,7 @@ function normalize(item, category) {
 }
 
 async function syncCatalog() {
-  const response = await axios.get(SOURCE_URL, { timeout: 60000 });
+  const response = await axios.get(SOURCE_URL + "?t=" + Date.now(), { timeout: 60000, headers: { "Cache-Control": "no-cache", "Pragma": "no-cache" } });
   const payload = response.data;
 
   if (!payload || payload.success !== true || !payload.data) {
