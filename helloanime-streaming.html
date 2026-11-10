@@ -2026,14 +2026,27 @@ function changeEpisode2(ep) {
 }
 
 // Setup episode buttons
-function setupEpisodeButtons() {
+async function setupEpisodeButtons() {
   const episodeButtons = document.getElementById('episodeButtons2');
   if (!episodeButtons) return;
 
-  episodeButtons.innerHTML = '';
-
   if (isNewDivMode && !isMovie) {
-    // New format - show all episodes based on maximum available
+    try {
+      const apiUrl = 'https://anime-api-new.antideploy.app/api/anime/' +
+        encodeURIComponent(tmdbId) + '/episodes?season=' +
+        encodeURIComponent(season) + '&page=1&limit=500';
+      const response = await fetch(apiUrl);
+      const data = await response.json();
+
+      if (response.ok && data.status && Number.isFinite(Number(data.total_episodes))) {
+        totalEpisodes = Number(data.total_episodes);
+        console.log('Live API episode count:', totalEpisodes);
+      }
+    } catch (error) {
+      console.warn('Live episode fetch failed; using existing count:', error);
+    }
+
+    episodeButtons.innerHTML = '';
     for (let i = 1; i <= totalEpisodes; i++) {
       const btn = document.createElement('button');
       btn.className = "episode-button2";
@@ -2044,11 +2057,11 @@ function setupEpisodeButtons() {
     }
     highlightSelectedEpisode2(currentEpisode.toString());
   } else if (!isNewDivMode && typeof episodeData !== 'undefined') {
-    // Old format - use episodeData
+    episodeButtons.innerHTML = '';
     Object.keys(episodeData).forEach(ep => {
       const btn = document.createElement('button');
       btn.className = "episode-button2";
-      btn.innerText = isNaN(parseInt(ep)) ? ep : ep;
+      btn.innerText = ep;
       btn.dataset.episode = ep;
       btn.onclick = function() { changeEpisode2(ep); };
       episodeButtons.appendChild(btn);
