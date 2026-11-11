@@ -3,6 +3,27 @@ require("dotenv").config();
 const express = require("express");
 const fs = require("fs");
 const { syncCatalog } = require("./src/services/catalog-sync");
+
+let catalogSyncRunning = false;
+
+async function runScheduledSync() {
+  if (catalogSyncRunning) {
+    console.log("Catalog sync skipped: already running");
+    return;
+  }
+
+  catalogSyncRunning = true;
+
+  try {
+    const result = await syncCatalog();
+    console.log("Scheduled catalog sync completed:", result);
+  } catch (error) {
+    console.error("Scheduled catalog sync failed:", error.message);
+  } finally {
+    catalogSyncRunning = false;
+  }
+}
+
 const blakite = require("./src/services/blakite");
 const cors = require("cors");
 const seasonStore = require("./src/storage/season-store");
@@ -61,8 +82,14 @@ app.get("/api/cron/sync", async (req, res) => {
     return res.status(401).json({ status: false, message: "Unauthorized" });
   }
   try {
-    const result = await syncCatalog();
-    res.json(result);
+    if (catalogSyncRunning) return res.status(409).json({ status: false, message: "Sync already running" });
+    catalogSyncRunning = true;
+    try {
+      const result = await syncCatalog();
+      res.json(result);
+    } finally {
+      catalogSyncRunning = false;
+    }
   } catch (error) {
     res.status(500).json({ status: false, message: error.message });
   }
@@ -231,7 +258,11 @@ app.get("/api/resolve/blakite/:tmdbId/:season/:episode", async (req, res) => {
 
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
-  app.listen(PORT, "0.0.0.0", () => console.log(`Anime API running on port ${PORT}`));
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Anime API running on port ${PORT}`);
+    runScheduledSync();
+    setInterval(runScheduledSync, 30 * 60 * 1000);
+  });
 }
 
 module.exports = app;
