@@ -231,7 +231,7 @@ app.get("/api/resolve/blakite/:tmdbId/:season/:episode", async (req, res) => {
 
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => console.log(`Anime API running on port ${PORT}`));
+  app.listen(PORT, "0.0.0.0", () => console.log(`Anime API running on port ${PORT}`));
 }
 
 module.exports = app;
