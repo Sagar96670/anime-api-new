@@ -243,6 +243,28 @@ app.get("/api/resolve/blakite/:tmdbId/:episodeId", async (req, res) => {
   }
 });
 
+// Blakite Download Page Resolver
+app.get("/api/download/blakite/:tmdbId/:season/:episode", async (req, res) => {
+  try {
+    const { tmdbId, season, episode } = req.params;
+    const episodeId = `${season}-${episode}`;
+
+    const result = await blakite.resolveEpisode(tmdbId, episodeId);
+
+    res.json({
+      status: true,
+      animeTitle: result.animeTitle,
+      tmdbId,
+      season: Number(season),
+      episode: Number(episode),
+      available_qualities: result.available_qualities,
+      downloads: result.downloads
+    });
+  } catch (error) {
+    res.status(502).json({ status: false, message: error.message });
+  }
+});
+
 // Blakite Season/Episode Resolver
 app.get("/api/resolve/blakite/:tmdbId/:season/:episode", async (req, res) => {
   try {

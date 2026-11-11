@@ -72,7 +72,18 @@ async function resolveEpisode(tmdbId, episodeId, requestedQuality) {
     throw new Error(`Unsupported video format: ${data.format}`);
   }
 
+  const downloads = Object.fromEntries(
+    availableQualities.map(q => {
+      const qCode = qualityCodes[q];
+      const url = data.format === "MP4"
+        ? `${CDN}${data.dataId}.${qCode}.mp4`
+        : `${CDN}${data.dataId}.${qCode}.tar?r_file=chunklist.m3u8&r_type=application%2Fvnd.apple.mpegurl&r_range=${ranges[q]}`;
+      return [q, url];
+    })
+  );
+
   return {
+    downloads,
     animeTitle: data.animeTitle,
     tmdbId: data.tmdbId,
     season: data.seasonNumber,
@@ -80,7 +91,10 @@ async function resolveEpisode(tmdbId, episodeId, requestedQuality) {
     quality,
     available_qualities: availableQualities,
     format: data.format,
-    video_url: videoUrl
+    video_url: videoUrl,
+    dataId: data.dataId,
+    qid: data.qid,
+    ranges: data.ranges || ""
   };
 }
 
